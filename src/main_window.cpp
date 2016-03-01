@@ -16,6 +16,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <tesseract/baseapi.h>
 #include <locale.h>
+#include <thread>
 
 /*****************************************************************************
 ** Namespaces
@@ -145,119 +146,126 @@ QImage MainWindow::mat2qimage(cv::Mat& mat) {
     return QImage();
 }
 
-void MainWindow::updateViewBool(bool b)
+void MainWindow::processPicture()
 {
-    updateView(0);
+    // Lock the mutex so that we can avoid queing up images
+    qnode.picLock.lock();
+
+    // Convert ROS image message to jpeg with opencv
+    cv_bridge::CvImagePtr cvImage;
+    try {
+        cvImage = cv_bridge::toCvCopy(qnode.imagePtr, "8UC3");
+    } catch (cv_bridge::Exception& e) {
+        std::cout << "Failed conversion of the image" << std::endl;
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        return;
+    }
+
+    cv::Mat final = cvImage.get()->image;
+    cv::Mat temp;
+    cv::Mat temp2;
+
+    if (ui.cropingCheckBox->isChecked()) {
+        // Define a box that is our Region of Interest
+        cv::Rect roi;
+        roi.x = ui.xposSlider->value();
+        roi.y = ui.yposSlider->value();
+        roi.width = ui.widthSlider->value();
+        roi.height = ui.heightSlider->value();
+
+        // Crop the original image to the defined ROI
+        temp = final(roi);
+        final = temp;
+    } else if (ui.cropingVisualizeCheckBox->isChecked()) {
+        // Define a box that is our Region of Interest
+        cv::Rect roi;
+        roi.x = ui.xposSlider->value();
+        roi.y = ui.yposSlider->value();
+        roi.width = ui.widthSlider->value();
+        roi.height = ui.heightSlider->value();
+        cv::rectangle(final, roi, cv::Scalar(0, 255, 0));
+    }
+
+    // The picture has been set but the cropping sliders are not activated
+    // We now know the size of the image, so we can adjust our sliders accordingly
+    if (!ui.xposSlider->isEnabled()) {
+        ui.xposSlider->setMinimum(0);
+        ui.xposSlider->setMaximum(final.rows);
+        ui.xposSlider->setEnabled(true);
+        ui.heightSlider->setMinimum(0);
+        ui.heightSlider->setMaximum(final.rows);
+        ui.heightSlider->setEnabled(true);
+        ui.yposSlider->setMinimum(0);
+        ui.yposSlider->setMaximum(final.cols);
+        ui.yposSlider->setEnabled(true);
+        ui.widthSlider->setMinimum(0);
+        ui.widthSlider->setMaximum(final.cols);
+        ui.widthSlider->setEnabled(true);
+    }
+
+    if (ui.sharpeningCheckBox->isChecked()) {
+        cv::GaussianBlur(final, temp2, cv::Size(0, 0), 5);
+        cv::addWeighted(final, 3, temp2, -1, 0, temp);
+        final = temp;
+    }
+
+    if (ui.medianCheckBox->isChecked()) {
+        // Post-processing to remove noise
+        int kernelSize = ui.medianSlider->value();
+
+        if (kernelSize % 2 != 1)
+            kernelSize = kernelSize - 1;
+
+        if (kernelSize < 1)
+            kernelSize = 1;
+
+        cv::medianBlur(final, temp, kernelSize);
+        final = temp;
+    }
+
+    // Should we run the monochrome filtering?
+    if (ui.monoChromeCheckBox->isChecked()) {
+        cv::inRange(final, cv::Scalar(this->ui.monochromeSlider->value(), this->ui.monochromeSlider->value(), this->ui.monochromeSlider->value()),
+                           cv::Scalar(255, 255, 255), temp);
+        final = temp;
+    }
+
+    if (ui.imageInversionCheckBox->isChecked()) {
+        cv::bitwise_not(final, temp);
+        final = temp;
+    }
+
+    // Should we run text detection?
+    if (ui.textDetectionCheckBox->isChecked()) {
+        tesseract::TessBaseAPI *tessApi = new tesseract::TessBaseAPI();
+        cv::Mat clone = final.clone();
+        if (tessApi->Init("/usr/share/tesseract-ocr/tessdata/", NULL))
+            std::cout << "Failed to init tesseract" << std::endl;
+        tessApi->SetVariable("classify_bln_numeric_mode", "1");
+        tessApi->SetPageSegMode(tesseract::PageSegMode(7));
+        tessApi->SetImage((uchar*)clone.data, clone.size().width, clone.size().height, clone.channels(), clone.step1());
+        const char* out = tessApi->GetUTF8Text();
+
+        if (out)
+            ui.foundTextLabel->setText(QString(out));
+
+        //delete tessApi;
+        delete [] out;
+        delete tessApi;
+    }
+
+    QImage qImg = mat2qimage(final);
+    QPixmap pixMap = QPixmap::fromImage(qImg);
+    this->ui.pixLabel->setPixmap(pixMap);
+
+    // Release the mutex and allow to process another image
+    qnode.picLock.unlock();
 }
 
 void MainWindow::updateView(int i)
 {
     if (qnode.pictureHasBeenSet()) {
-
-        // Convert ROS image message to jpeg with opencv
-        cv_bridge::CvImagePtr cvImage;
-        try {
-            cvImage = cv_bridge::toCvCopy(qnode.imagePtr, "8UC3");
-        } catch (cv_bridge::Exception& e) {
-            ROS_ERROR("cv_bridge exception: %s", e.what());
-            return;
-        }
-
-        cv::Mat final = cvImage.get()->image;
-        cv::Mat temp;
-        cv::Mat temp2;
-
-        if (ui.cropingCheckBox->isChecked()) {
-            // Define a box that is our Region of Interest
-            cv::Rect roi;
-            roi.x = ui.xposSlider->value();
-            roi.y = ui.yposSlider->value();
-            roi.width = ui.widthSlider->value();
-            roi.height = ui.heightSlider->value();
-
-            // Crop the original image to the defined ROI
-            temp = final(roi);
-            final = temp;
-        } else if (ui.cropingVisualizeCheckBox->isChecked()) {
-            // Define a box that is our Region of Interest
-            cv::Rect roi;
-            roi.x = ui.xposSlider->value();
-            roi.y = ui.yposSlider->value();
-            roi.width = ui.widthSlider->value();
-            roi.height = ui.heightSlider->value();
-            cv::rectangle(final, roi, cv::Scalar(0, 255, 0));
-        }
-
-        // The picture has been set but the cropping sliders are not activated
-        // We now know the size of the image, so we can adjust our sliders accordingly
-        if (!ui.xposSlider->isEnabled()) {
-            ui.xposSlider->setMinimum(0);
-            ui.xposSlider->setMaximum(final.rows);
-            ui.xposSlider->setEnabled(true);
-            ui.heightSlider->setMinimum(0);
-            ui.heightSlider->setMaximum(final.rows);
-            ui.heightSlider->setEnabled(true);
-            ui.yposSlider->setMinimum(0);
-            ui.yposSlider->setMaximum(final.cols);
-            ui.yposSlider->setEnabled(true);
-            ui.widthSlider->setMinimum(0);
-            ui.widthSlider->setMaximum(final.cols);
-            ui.widthSlider->setEnabled(true);
-        }
-
-        if (ui.sharpeningCheckBox->isChecked()) {
-            cv::GaussianBlur(final, temp2, cv::Size(0, 0), 5);
-            cv::addWeighted(final, 3, temp2, -1, 0, temp);
-            final = temp;
-        }
-
-        if (ui.medianCheckBox->isChecked()) {
-            // Post-processing to remove noise
-            int kernelSize = ui.medianSlider->value();
-
-            if (kernelSize % 2 != 1)
-                kernelSize = kernelSize - 1;
-
-            if (kernelSize < 1)
-                kernelSize = 1;
-
-            cv::medianBlur(final, temp, kernelSize);
-            final = temp;
-        }
-
-        // Should we run the monochrome filtering?
-        if (ui.monoChromeCheckBox->isChecked()) {
-            cv::inRange(final, cv::Scalar(this->ui.monochromeSlider->value(), this->ui.monochromeSlider->value(), this->ui.monochromeSlider->value()),
-                               cv::Scalar(255, 255, 255), temp);
-            final = temp;
-        }
-
-        if (ui.imageInversionCheckBox->isChecked()) {
-            cv::bitwise_not(final, temp);
-            final = temp;
-        }
-
-        // Should we run text detection?
-        if (ui.textDetectionCheckBox->isChecked()) {
-            tesseract::TessBaseAPI *tessApi = new tesseract::TessBaseAPI();
-            cv::Mat clone = final.clone();
-            if (tessApi->Init("/usr/share/tesseract-ocr/tessdata/", NULL))
-                std::cout << "Failed to init tesseract" << std::endl;
-            tessApi->SetVariable("classify_bln_numeric_mode", "1");
-            tessApi->SetPageSegMode(tesseract::PageSegMode(7));
-            tessApi->SetImage((uchar*)clone.data, clone.size().width, clone.size().height, clone.channels(), clone.step1());
-            const char* out = tessApi->GetUTF8Text();
-
-            if (out)
-                ui.foundTextLabel->setText(QString(out));
-
-            //delete tessApi;
-            delete [] out;
-        }
-
-        QImage qImg = mat2qimage(final);
-        QPixmap pixMap = QPixmap::fromImage(qImg);
-        this->ui.pixLabel->setPixmap(pixMap);
+        processPicture();
     }
 }
 

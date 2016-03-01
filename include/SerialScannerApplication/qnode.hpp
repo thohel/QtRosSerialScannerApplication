@@ -21,6 +21,7 @@
 #include <QThread>
 #include <QStringListModel>
 #include <sensor_msgs/Image.h>
+#include <mutex>
 
 /*****************************************************************************
 ** Namespaces
@@ -42,6 +43,7 @@ public:
     sensor_msgs::ImageConstPtr imagePtr;
     bool pictureHasBeenSet();
     void imageCallback(const sensor_msgs::ImageConstPtr& imagePtr);
+    std::mutex picLock;
 
 public Q_SLOTS:
     void findTopics();

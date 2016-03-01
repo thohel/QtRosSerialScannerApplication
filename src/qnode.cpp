@@ -48,6 +48,7 @@ bool QNode::init() {
 	}
 	ros::start(); // explicitly needed since our nodehandle is going out of scope.
 	start();
+    picLock.unlock();
 	return true;
 }
 
@@ -90,9 +91,12 @@ void QNode::subscribeToImage(QString topic)
 // ************************************ //
 void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
 {
-    imagePtr = image_msg;
     pictureSet = true;
-    updateView(0);
+    if (picLock.try_lock()) {
+        imagePtr = image_msg;
+        picLock.unlock();
+        updateView(0);
+    }
 }
 
 bool QNode::pictureHasBeenSet()

@@ -38,12 +38,12 @@ public:
 	~MainWindow();
 	void closeEvent(QCloseEvent *event); // Overloaded function
     QImage mat2qimage(cv::Mat& mat);
+    void processPicture();
 
 public Q_SLOTS:
     void on_button_refresh_topic_clicked(bool check);
     void on_button_subscribe_topic_clicked(bool check);
     void updateView(int i);
-    void updateViewBool(bool b);
     void updateTopics(QStringList list);
 
 Q_SIGNALS:
