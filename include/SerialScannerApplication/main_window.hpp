@@ -53,6 +53,12 @@ Q_SIGNALS:
 private:
 	Ui::MainWindowDesign ui;
 	QNode qnode;
+    cv::Mat getSecondOrderDerivativeOfImage(cv::Mat input);
+    cv::Mat getErodedImage(cv::Mat input, int erosion_size);
+    cv::Mat getContours(cv::Mat input);
+    cv::Mat getThresholdImage(cv::Mat input, int threshold);
+    cv::Mat getGaussianBlurSharpenedImage(cv::Mat input);
+    cv::Mat getMedianFilteredImage(cv::Mat input, int kernel_size);
 };
 
 }  // namespace SerialScannerApplication

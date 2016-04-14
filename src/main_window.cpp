@@ -40,13 +40,6 @@ MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
     QObject::connect(&qnode, SIGNAL(rosShutdown()), this, SLOT(close()));
 
     QObject::connect(&qnode, SIGNAL(updateView(int)), this, SLOT(updateView(int)));
-//    QObject::connect(ui.monochromeSlider, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-//    QObject::connect(ui.textDetectionCheckBox, SIGNAL(toggled(bool)), this, SLOT(updateViewBool(bool)));
-//    QObject::connect(ui.monoChromeCheckBox, SIGNAL(toggled(bool)), this, SLOT(updateViewBool(bool)));
-//    QObject::connect(ui.medianCheckBox, SIGNAL(toggled(bool)), this, SLOT(updateViewBool(bool)));
-//    QObject::connect(ui.sharpeningCheckBox, SIGNAL(toggled(bool)), this, SLOT(updateViewBool(bool)));
-//    QObject::connect(ui.imageInversionCheckBox, SIGNAL(toggled(bool)), this, SLOT(updateViewBool(bool)));
-//    QObject::connect(ui.cropingCheckBox, SIGNAL(toggled(bool)), this, SLOT(updateViewBool(bool)));
 
     // Signals for topic list in drop-down box
     QObject::connect(this, SIGNAL(getTopics()), &qnode, SLOT(findTopics()));
@@ -66,22 +59,6 @@ MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
 }
 
 MainWindow::~MainWindow() {}
-
-/*****************************************************************************
-** Implementation [Slots]
-*****************************************************************************/
-
-/*****************************************************************************
-** Implemenation [Slots][manually connected]
-*****************************************************************************/
-
-/*****************************************************************************
-** Implementation [Menu]
-*****************************************************************************/
-
-/*****************************************************************************
-** Implementation [Configuration]
-*****************************************************************************/
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
@@ -146,6 +123,99 @@ QImage MainWindow::mat2qimage(cv::Mat& mat) {
     return QImage();
 }
 
+cv::Mat MainWindow::getThresholdImage(cv::Mat input, int threshold)
+{
+    cv::Mat return_mat = input;
+
+    if (input.type() != CV_8UC1) {
+        // Convert the image to grayscale
+        cvtColor(input, return_mat, CV_BGR2GRAY);
+    }
+
+    cv::Mat return_mat_binary;
+    cv::threshold(return_mat, return_mat_binary, threshold, 255, 0);
+    return return_mat_binary;
+}
+
+cv::Mat MainWindow::getSecondOrderDerivativeOfImage(cv::Mat input)
+{
+    int kernel_size = 3;
+    int scale = 1;
+    int delta = 0;
+    int ddepth = CV_16S;
+
+    // Convert the image to grayscale
+    cv::Mat input_gray;
+    cv::cvtColor(input, input_gray, CV_BGR2GRAY);
+
+    // Apply Laplacian transformation
+    cv::Mat return_mat;
+    cv::Laplacian(input_gray, return_mat, ddepth, kernel_size, scale, delta, cv::BORDER_DEFAULT);
+
+    // Change format
+    cv::Mat return_mat_formatted;
+    return_mat.convertTo(return_mat_formatted, CV_8UC3);
+
+    return return_mat_formatted;
+}
+
+cv::Mat MainWindow::getContours(cv::Mat input)
+{
+    cv::vector<cv::vector<cv::Point> > contours;
+    cv::vector<cv::Vec4i> hierarchy;
+
+    cv::findContours(input, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+
+    // Draw contours
+    cv::Mat final = cv::Mat::zeros(input.size(), CV_8UC1 );
+
+    for(uint i = 0; i < contours.size(); i++) {
+        cv::Scalar color = cv::Scalar(255);
+        cv::drawContours(final, contours, i, color, 1, 4, hierarchy, 2, cv::Point() );
+    }
+
+    return final;
+}
+
+cv::Mat MainWindow::getErodedImage(cv::Mat input, int erosion_size)
+{
+    cv::Mat element = getStructuringElement(cv::MORPH_RECT,
+                                            cv::Size(2*erosion_size + 1, 2*erosion_size + 1),
+                                            cv::Point(erosion_size, erosion_size));
+    cv::Mat return_mat;
+
+    // Apply the erosion operation
+    cv::erode(input, return_mat, element);
+
+    return return_mat;
+}
+
+cv::Mat MainWindow::getGaussianBlurSharpenedImage(cv::Mat input)
+{
+    cv::Mat temp;
+    cv::Mat return_mat;
+    cv::GaussianBlur(input, temp, cv::Size(0, 0), 3);
+    cv::addWeighted(input, 3, temp, -1, 0, return_mat);
+    return return_mat;
+}
+
+cv::Mat MainWindow::getMedianFilteredImage(cv::Mat input, int kernel_size)
+{
+    int kernelSize = kernel_size;
+
+    if (kernelSize % 2 != 1)
+        kernelSize = kernelSize - 1;
+
+    if (kernelSize < 1)
+        kernelSize = 1;
+
+    cv::Mat return_mat;
+
+    cv::medianBlur(input, return_mat, kernelSize);
+
+    return return_mat;
+}
+
 void MainWindow::processPicture()
 {
     // Lock the mutex so that we can avoid queing up images
@@ -163,7 +233,11 @@ void MainWindow::processPicture()
 
     cv::Mat final = cvImage.get()->image;
     cv::Mat temp;
-    cv::Mat temp2;
+
+    if (ui.upsampleCheckBox->isChecked()) {
+        cv::pyrUp(final, temp, cv::Size(final.cols*2, final.rows*2));
+        final = temp;
+    }
 
     if (ui.cropingCheckBox->isChecked()) {
         // Define a box that is our Region of Interest
@@ -204,30 +278,17 @@ void MainWindow::processPicture()
     }
 
     if (ui.sharpeningCheckBox->isChecked()) {
-        cv::GaussianBlur(final, temp2, cv::Size(0, 0), 5);
-        cv::addWeighted(final, 3, temp2, -1, 0, temp);
-        final = temp;
+        final = getGaussianBlurSharpenedImage(final);
     }
 
     if (ui.medianCheckBox->isChecked()) {
         // Post-processing to remove noise
-        int kernelSize = ui.medianSlider->value();
-
-        if (kernelSize % 2 != 1)
-            kernelSize = kernelSize - 1;
-
-        if (kernelSize < 1)
-            kernelSize = 1;
-
-        cv::medianBlur(final, temp, kernelSize);
-        final = temp;
+        final = getMedianFilteredImage(final, ui.medianSlider->value());
     }
 
     // Should we run the monochrome filtering?
     if (ui.monoChromeCheckBox->isChecked()) {
-        cv::inRange(final, cv::Scalar(this->ui.monochromeSlider->value(), this->ui.monochromeSlider->value(), this->ui.monochromeSlider->value()),
-                           cv::Scalar(255, 255, 255), temp);
-        final = temp;
+        final = getThresholdImage(final, ui.monochromeSlider->value());
     }
 
     if (ui.imageInversionCheckBox->isChecked()) {
@@ -244,13 +305,22 @@ void MainWindow::processPicture()
         tessApi->SetVariable("classify_bln_numeric_mode", "1");
         tessApi->SetPageSegMode(tesseract::PageSegMode(7));
         tessApi->SetImage((uchar*)clone.data, clone.size().width, clone.size().height, clone.channels(), clone.step1());
-        const char* out = tessApi->GetUTF8Text();
+        tessApi->Recognize(0);
+        tesseract::ResultIterator *ri = tessApi->GetIterator();
+        tesseract::PageIteratorLevel level = tesseract::RIL_WORD;
+        if (ri != 0) {
+            const char *word = ri->GetUTF8Text(level);
+            QString ret = QString(word);
+            ret.append("    Conf: ");
+            char *conf_char;
+            sprintf(conf_char, "%f", ri->Confidence(level));
+            ret.append(conf_char);
 
-        if (out)
-            ui.foundTextLabel->setText(QString(out));
+            ui.foundTextLabel->setText(ret);
 
-        //delete tessApi;
-        delete [] out;
+            delete[] word;
+        }
+        delete ri;
         delete tessApi;
     }
 

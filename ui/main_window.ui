@@ -509,13 +509,26 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>50</y>
+       <y>40</y>
        <width>221</width>
        <height>22</height>
       </rect>
      </property>
      <property name="text">
       <string>Visualize croping</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="upsampleCheckBox">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>171</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Activate upsampling</string>
      </property>
     </widget>
    </widget>
