@@ -48,6 +48,9 @@ MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
     // Signals for subscribing to image topic
     QObject::connect(this, SIGNAL(subscribeToImage(QString)), &qnode, SLOT(subscribeToImage(QString)));
 
+    // Signal that we have chosen to use opencv camera grabber
+    QObject::connect(ui.opencvCheckBox, SIGNAL(toggled(bool)), this, SLOT(opencvCheckBox_changed(bool)));
+
     ui.xposSlider->setEnabled(false);
     ui.yposSlider->setEnabled(false);
     ui.widthSlider->setEnabled(false);
@@ -69,6 +72,47 @@ void MainWindow::updateTopics(QStringList list)
 {
     ui.comboBox->clear();
     ui.comboBox->addItems(list);
+}
+
+void MainWindow::opencvCheckBox_changed(bool check)
+{
+    if (check) {
+        // open the default camera, use something different from 0 otherwise;
+        // Check VideoCapture documentation.
+        if(!cap.open(0)) {
+            std::cout << "Failed to open camera!" << std::endl;
+            return;
+        }
+
+        timer = new QTimer(this);
+        connect(timer, SIGNAL(timeout()), this, SLOT(updateViewVoid()));
+
+        // XXX: Select one of the two options
+        if (false) {
+            std::cout << cap.set(CV_CAP_PROP_FRAME_WIDTH, 2304) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FRAME_HEIGHT, 1536) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FPS, 2) << std::endl;
+            timer->start(500);
+            std::cout << "Timer (for opencv) has been started" << std::endl;
+        } else if (false) {
+            std::cout << cap.set(CV_CAP_PROP_FRAME_WIDTH, 1920) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FRAME_HEIGHT, 1080) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FPS, 5) << std::endl;
+            timer->start(200);
+            std::cout << "Timer (for opencv) has been started" << std::endl;
+        } else {
+            std::cout << cap.set(CV_CAP_PROP_FRAME_WIDTH, 1920) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FRAME_HEIGHT, 1080) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FPS, 30) << std::endl;
+            timer->start(33);
+            std::cout << "Timer (for opencv) has been started" << std::endl;
+        }
+    } else {
+        if (timer) {
+            timer->stop();
+            delete timer;
+        }
+    }
 }
 
 void MainWindow::on_button_refresh_topic_clicked(bool check)
@@ -216,22 +260,9 @@ cv::Mat MainWindow::getMedianFilteredImage(cv::Mat input, int kernel_size)
     return return_mat;
 }
 
-void MainWindow::processPicture()
+void MainWindow::processPicture(cv::Mat pic)
 {
-    // Lock the mutex so that we can avoid queing up images
-    qnode.picLock.lock();
-
-    // Convert ROS image message to jpeg with opencv
-    cv_bridge::CvImagePtr cvImage;
-    try {
-        cvImage = cv_bridge::toCvCopy(qnode.imagePtr, "8UC3");
-    } catch (cv_bridge::Exception& e) {
-        std::cout << "Failed conversion of the image" << std::endl;
-        ROS_ERROR("cv_bridge exception: %s", e.what());
-        return;
-    }
-
-    cv::Mat final = cvImage.get()->image;
+    cv::Mat final = pic;
     cv::Mat temp;
 
     if (ui.upsampleCheckBox->isChecked()) {
@@ -255,8 +286,8 @@ void MainWindow::processPicture()
         cv::Rect roi;
         roi.x = ui.xposSlider->value();
         roi.y = ui.yposSlider->value();
-        roi.width = ui.widthSlider->value();
-        roi.height = ui.heightSlider->value();
+        roi.width = (roi.x + ui->widthSlider->value() > final.cols) ? final.cols - roi.x : ui->widthSlider->value();
+        roi.height = (roi.y + ui->heightSlider->value() > final.rows) ? final.rows - roi.y : ui->heightSlider->value();
         cv::rectangle(final, roi, cv::Scalar(0, 255, 0));
     }
 
@@ -264,17 +295,20 @@ void MainWindow::processPicture()
     // We now know the size of the image, so we can adjust our sliders accordingly
     if (!ui.xposSlider->isEnabled()) {
         ui.xposSlider->setMinimum(0);
-        ui.xposSlider->setMaximum(final.rows);
+        ui.xposSlider->setMaximum(final.cols);
         ui.xposSlider->setEnabled(true);
-        ui.heightSlider->setMinimum(0);
-        ui.heightSlider->setMaximum(final.rows);
-        ui.heightSlider->setEnabled(true);
+
         ui.yposSlider->setMinimum(0);
-        ui.yposSlider->setMaximum(final.cols);
+        ui.yposSlider->setMaximum(final.rows);
         ui.yposSlider->setEnabled(true);
+
         ui.widthSlider->setMinimum(0);
         ui.widthSlider->setMaximum(final.cols);
         ui.widthSlider->setEnabled(true);
+
+        ui.heightSlider->setMinimum(0);
+        ui.heightSlider->setMaximum(final.rows);
+        ui.heightSlider->setEnabled(true);
     }
 
     if (ui.sharpeningCheckBox->isChecked()) {
@@ -326,16 +360,48 @@ void MainWindow::processPicture()
 
     QImage qImg = mat2qimage(final);
     QPixmap pixMap = QPixmap::fromImage(qImg);
-    this->ui.pixLabel->setPixmap(pixMap);
+    this->ui.imageLabel->setPixmap(pixMap);
+}
 
-    // Release the mutex and allow to process another image
-    qnode.picLock.unlock();
+void MainWindow::updateViewVoid()
+{
+    updateView(0);
 }
 
 void MainWindow::updateView(int i)
 {
+    std::cout << "Calling update-view" << std::endl;
+/*
     if (qnode.pictureHasBeenSet()) {
-        processPicture();
+        // Lock the mutex so that we can avoid queing up images
+        qnode.picLock.lock();
+
+        // Convert ROS image message to jpeg with opencv
+        cv_bridge::CvImagePtr cvImage;
+        try {
+            cvImage = cv_bridge::toCvCopy(qnode.imagePtr, "8UC3");
+        } catch (cv_bridge::Exception& e) {
+            std::cout << "Failed conversion of the image" << std::endl;
+            ROS_ERROR("cv_bridge exception: %s", e.what());
+            return;
+        }
+
+        // Release the mutex and allow to process another image
+        qnode.picLock.unlock();
+
+        processPicture(cvImage.get()->image);
+    }
+*/
+    if (ui.opencvCheckBox->isChecked()) {
+        cv::Mat pic;
+        std::cout << "Grabbing an opencv image" << std::endl;
+        cap >> pic;
+
+        if (pic.empty())
+            return;
+
+        std::cout << "Calling process picture with a opencv image" << std::endl;
+        processPicture(pic);
     }
 }
 

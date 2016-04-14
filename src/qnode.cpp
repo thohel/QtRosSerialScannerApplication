@@ -6,10 +6,6 @@
  * @date February 2011
  **/
 
-/*****************************************************************************
-** Includes
-*****************************************************************************/
-
 #include <ros/ros.h>
 #include <ros/network.h>
 #include <string>
@@ -17,15 +13,7 @@
 #include <sstream>
 #include "../include/SerialScannerApplication/qnode.hpp"
 
-/*****************************************************************************
-** Namespaces
-*****************************************************************************/
-
 namespace SerialScannerApplication {
-
-/*****************************************************************************
-** Implementation
-*****************************************************************************/
 
 QNode::QNode(int argc, char** argv ) :
 	init_argc(argc),
@@ -87,8 +75,6 @@ void QNode::subscribeToImage(QString topic)
     imageSub = n.subscribe<sensor_msgs::Image, QNode>(tmp, 1, &QNode::imageCallback, this);
 }
 
-// ********* CALLBACK METHODS ********* //
-// ************************************ //
 void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
 {
     pictureSet = true;

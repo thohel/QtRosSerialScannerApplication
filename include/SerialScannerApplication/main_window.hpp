@@ -15,8 +15,7 @@
 #include <QtGui/QMainWindow>
 #include "ui_main_window.h"
 #include "qnode.hpp"
-#include <opencv/cv.hpp>
-#include <opencv/cv.h>
+#include <opencv2/opencv.hpp>
 
 /*****************************************************************************
 ** Namespace
@@ -38,13 +37,15 @@ public:
 	~MainWindow();
 	void closeEvent(QCloseEvent *event); // Overloaded function
     QImage mat2qimage(cv::Mat& mat);
-    void processPicture();
+    void processPicture(cv::Mat pic);
 
 public Q_SLOTS:
     void on_button_refresh_topic_clicked(bool check);
     void on_button_subscribe_topic_clicked(bool check);
+    void updateViewVoid();
     void updateView(int i);
     void updateTopics(QStringList list);
+    void opencvCheckBox_changed(bool check);
 
 Q_SIGNALS:
     void getTopics();
@@ -53,12 +54,16 @@ Q_SIGNALS:
 private:
 	Ui::MainWindowDesign ui;
 	QNode qnode;
-    cv::Mat getSecondOrderDerivativeOfImage(cv::Mat input);
+    cv::VideoCapture cap;
+    QTimer *timer;
+    int rest_counter;
+    // Image manipulation functions
     cv::Mat getErodedImage(cv::Mat input, int erosion_size);
     cv::Mat getContours(cv::Mat input);
     cv::Mat getThresholdImage(cv::Mat input, int threshold);
     cv::Mat getGaussianBlurSharpenedImage(cv::Mat input);
     cv::Mat getMedianFilteredImage(cv::Mat input, int kernel_size);
+    cv::Mat getSecondOrderDerivativeOfImage(cv::Mat input);
 };
 
 }  // namespace SerialScannerApplication

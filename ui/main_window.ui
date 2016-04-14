@@ -6,32 +6,19 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1193</width>
-    <height>899</height>
+    <width>1409</width>
+    <height>1045</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <widget class="QLabel" name="pixLabel">
-    <property name="geometry">
-     <rect>
-      <x>26</x>
-      <y>166</y>
-      <width>721</width>
-      <height>541</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>TextLabel</string>
-    </property>
-   </widget>
    <widget class="QFrame" name="frame">
     <property name="geometry">
      <rect>
-      <x>920</x>
-      <y>0</y>
+      <x>1140</x>
+      <y>10</y>
       <width>261</width>
       <height>831</height>
      </rect>
@@ -614,7 +601,7 @@
     <widget class="QLabel" name="label_4">
      <property name="geometry">
       <rect>
-       <x>180</x>
+       <x>10</x>
        <y>0</y>
        <width>161</width>
        <height>35</height>
@@ -629,6 +616,80 @@
       <string>TOPIC SELECTOR</string>
      </property>
     </widget>
+    <widget class="QCheckBox" name="opencvCheckBox">
+     <property name="geometry">
+      <rect>
+       <x>180</x>
+       <y>10</y>
+       <width>281</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Use OpenCV's grabbing functionality</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QFrame" name="frame_4">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>150</y>
+      <width>1121</width>
+      <height>820</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QWidget" name="verticalLayoutWidget">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>0</y>
+       <width>1121</width>
+       <height>821</height>
+      </rect>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <widget class="QScrollArea" name="scrollArea">
+        <property name="widgetResizable">
+         <bool>true</bool>
+        </property>
+        <widget class="QWidget" name="scrollAreaWidgetContents">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>1117</width>
+           <height>817</height>
+          </rect>
+         </property>
+         <widget class="QLabel" name="imageLabel">
+          <property name="geometry">
+           <rect>
+            <x>0</x>
+            <y>0</y>
+            <width>1121</width>
+            <height>821</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+          <property name="scaledContents">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </widget>
+       </widget>
+      </item>
+     </layout>
+    </widget>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
@@ -636,7 +697,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1193</width>
+     <width>1409</width>
      <height>25</height>
     </rect>
    </property>
